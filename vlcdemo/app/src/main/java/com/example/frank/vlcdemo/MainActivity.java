@@ -14,7 +14,6 @@ import org.videolan.libvlc.IVLCVout;
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
-import org.videolan.libvlc.MediaPlayCallback;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
