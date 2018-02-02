@@ -48,15 +48,10 @@ public class RGBProgram extends ShaderProgram {
 
     private ByteBuffer mBuffer;
 
-    private final int mWidth, mHeight;
-
     private float[] mMatrix = new float[16];
 
     public RGBProgram(Context context, int width, int height) {
-        super(context, R.raw.rgb_vertex, R.raw.rgb_fragment);
-
-        this.mWidth = width;
-        this.mHeight = height;
+        super(context, R.raw.rgb_vertex, R.raw.rgb_fragment, width, height);
 
         mUniformSTextureLocation = glGetUniformLocation(program, "s_texture");
         mUniformMatrixLocation = glGetUniformLocation(program, "u_Matrix");
@@ -73,7 +68,7 @@ public class RGBProgram extends ShaderProgram {
                 .order(ByteOrder.nativeOrder())
                 .asFloatBuffer();
 
-        mBuffer = ByteBuffer.allocateDirect(mWidth * mHeight * 4)
+        mBuffer = ByteBuffer.allocateDirect(width * height * 4)
                 .order(ByteOrder.nativeOrder());
 
         int[] textures = new int[1];
@@ -104,12 +99,12 @@ public class RGBProgram extends ShaderProgram {
 
     public void setUniforms(byte[] data, float scaleX, float scaleY, int rotateDegrees) {
         mBuffer.position(0);
-        mBuffer.put(data, 0, mWidth * mHeight * 4);
+        mBuffer.put(data, 0, width * height * 4);
 
         mBuffer.position(0);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureId);
-        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, mWidth, mHeight,
+        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height,
                 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, mBuffer);
         GLES20.glUniform1i(mUniformSTextureLocation, 0);
 
