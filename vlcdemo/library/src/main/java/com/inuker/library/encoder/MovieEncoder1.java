@@ -2,7 +2,9 @@ package com.inuker.library.encoder;
 
 import android.content.Context;
 import android.graphics.ImageFormat;
+import android.graphics.SurfaceTexture;
 
+import com.inuker.library.RGBProgram;
 import com.inuker.library.utils.LogUtils;
 
 import java.nio.ByteBuffer;
@@ -14,8 +16,8 @@ import java.nio.ByteOrder;
 
 public class MovieEncoder1 extends BaseMovieEncoder {
 
-    private YUVProgram mYUVProgram;
-    private ByteBuffer mYUVBuffer;
+    private volatile RGBProgram mRGBProgram;
+    private volatile ByteBuffer mYUVBuffer;
 
     public MovieEncoder1(Context context, int width, int height) {
         super(context, width, height);
@@ -23,8 +25,9 @@ public class MovieEncoder1 extends BaseMovieEncoder {
 
     @Override
     public void onPrepareEncoder() {
-        mYUVProgram = new YUVProgram(mContext, mWidth, mHeight);
-        mYUVBuffer = ByteBuffer.allocateDirect(mWidth * mHeight * ImageFormat.getBitsPerPixel(ImageFormat.NV21) / 8)
+        LogUtils.v(String.format("onPrepareEncoder width = %d, height = %d", mWidth, mHeight));
+        mRGBProgram = new RGBProgram(mContext, mWidth, mHeight);
+        mYUVBuffer = ByteBuffer.allocateDirect(mWidth * mHeight * 4)
                 .order(ByteOrder.nativeOrder());
     }
 
@@ -32,26 +35,29 @@ public class MovieEncoder1 extends BaseMovieEncoder {
     public void onFrameAvailable(Object object, long timestamp) {
         byte[] data = (byte[]) object;
 
-        synchronized (mYUVBuffer) {
-            mYUVBuffer.position(0);
-            int cap = mYUVBuffer.capacity();
-            int len = data.length;
-            LogUtils.v(String.format("%d- %d", mYUVBuffer.capacity(), data.length));
-            mYUVBuffer.put(data);
+        if (mYUVBuffer == null) {
+            return;
         }
 
+//        LogUtils.v(String.format("onFrameAvailable: data = %d, buffer = %d", data.length, mYUVBuffer.capacity()));
+
+        synchronized (mYUVBuffer) {
+            mYUVBuffer.position(0);
+            int len = Math.min(mYUVBuffer.capacity(), data.length);
+            mYUVBuffer.put(data, 0, len);
+        }
         mHandler.sendMessage(mHandler.obtainMessage(MSG_FRAME_AVAILABLE,
                 (int) (timestamp >> 32), (int) timestamp));
     }
 
     @Override
     public void onFrameAvailable() {
-        mYUVProgram.useProgram();
+        mRGBProgram.useProgram();
 
         synchronized (mYUVBuffer) {
-            mYUVProgram.setUniforms(mYUVBuffer.array());
+            mRGBProgram.setUniforms(mYUVBuffer.array());
         }
 
-        mYUVProgram.draw();
+        mRGBProgram.draw();
     }
 }

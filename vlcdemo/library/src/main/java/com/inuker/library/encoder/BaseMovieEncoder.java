@@ -23,6 +23,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 
+import com.inuker.library.utils.LogUtils;
+
 import java.io.File;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
@@ -72,8 +74,8 @@ public abstract class BaseMovieEncoder implements Runnable {
     protected volatile EncoderHandler mHandler;
 
     private Object mReadyFence = new Object();      // guards ready/running
-    private boolean mReady;
-    private boolean mRunning;
+    private volatile boolean mReady;
+    private volatile boolean mRunning;
 
     protected Context mContext;
 
@@ -140,6 +142,7 @@ public abstract class BaseMovieEncoder implements Runnable {
             }
         }
 
+        LogUtils.v(String.format("startRecording called"));
         mHandler.sendMessage(mHandler.obtainMessage(MSG_START_RECORDING, config));
     }
 
@@ -273,6 +276,7 @@ public abstract class BaseMovieEncoder implements Runnable {
      * Starts recording.
      */
     private void handleStartRecording(EncoderConfig config) {
+        LogUtils.v(String.format("handleStartRecording"));
         prepareEncoder(config.mMuxer, config.mEglContext, mWidth, mHeight);
         onPrepareEncoder();
     }

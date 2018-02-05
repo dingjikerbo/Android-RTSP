@@ -1,12 +1,13 @@
 package com.example.frank.vlcdemo;
 
-import android.graphics.Bitmap;
+import android.opengl.EGL14;
 import android.opengl.GLSurfaceView;
 
-import com.inuker.library.BitmapUtils;
 import com.inuker.library.RGBProgram;
-import com.inuker.library.TaskUtils;
-import com.inuker.library.utils.ImageUtils;
+import com.inuker.library.encoder.BaseMovieEncoder;
+import com.inuker.library.encoder.CameraHelper;
+import com.inuker.library.encoder.MovieEncoder1;
+import com.inuker.library.utils.LogUtils;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -34,8 +35,7 @@ public class RtspSurfaceRender implements GLSurfaceView.Renderer, RtspHelper.Rts
 
     private String mRtspUrl;
 
-    private volatile boolean mCapturePending;
-    private CaptureCallback mCaptureCallback;
+    private BaseMovieEncoder mVideoEncoder;
 
     public RtspSurfaceRender(GLSurfaceView glSurfaceView) {
         mGLSurfaceView = glSurfaceView;
@@ -49,10 +49,36 @@ public class RtspSurfaceRender implements GLSurfaceView.Renderer, RtspHelper.Rts
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
     }
 
+    public void startRecording() {
+        mGLSurfaceView.queueEvent(new Runnable() {
+            @Override
+            public void run() {
+                if (!mVideoEncoder.isRecording()) {
+                    File output = CameraHelper.getOutputMediaFile(CameraHelper.MEDIA_TYPE_VIDEO, "");
+                    LogUtils.v(String.format("startRecording: %s", output));
+                    mVideoEncoder.startRecording(new BaseMovieEncoder.EncoderConfig(output, EGL14.eglGetCurrentContext()));
+                }
+            }
+        });
+    }
+
+    public void stopRecording() {
+        mGLSurfaceView.queueEvent(new Runnable() {
+            @Override
+            public void run() {
+                if (mVideoEncoder.isRecording()) {
+                    mVideoEncoder.stopRecording();
+                }
+            }
+        });
+    }
+
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
+        LogUtils.v(String.format("onSurfaceChanged: width = %d, height = %d", width, height));
         mProgram = new RGBProgram(mGLSurfaceView.getContext(), width, height);
         mBuffer = ByteBuffer.allocateDirect(width * height * 4).order(ByteOrder.nativeOrder());
+        mVideoEncoder = new MovieEncoder1(mGLSurfaceView.getContext(), width, height);
         RtspHelper.getInstance().createPlayer(mRtspUrl, width, height, this);
     }
 
@@ -66,47 +92,30 @@ public class RtspSurfaceRender implements GLSurfaceView.Renderer, RtspHelper.Rts
         glClearColor(1f, 1f, 1f, 1f);
 
         mProgram.useProgram();
-        mProgram.setUniforms(mBuffer.array());
+
+        synchronized (mBuffer) {
+            mProgram.setUniforms(mBuffer.array(), 90);
+        }
+
         mProgram.draw();
     }
 
     @Override
-    public void onPreviewFrame(ByteBuffer buffer, int width, int height) {
-        mBuffer.rewind();
+    public void onPreviewFrame(final ByteBuffer buffer, int width, int height) {
+        synchronized (mBuffer) {
+            mBuffer.rewind();
 
-        buffer.rewind();
-        mBuffer.put(buffer);
-
-        if (mCapturePending) {
-            mCapturePending = false;
-            onCapture(width, height);
+            buffer.rewind();
+            mBuffer.put(buffer);
         }
 
-        mGLSurfaceView.requestRender();
-    }
-
-    private void onCapture(int width, int height) {
-        final Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        mBuffer.rewind();
-        bmp.copyPixelsFromBuffer(mBuffer);
-        TaskUtils.execute(new Runnable() {
+        mGLSurfaceView.post(new Runnable() {
             @Override
             public void run() {
-                File file = ImageUtils.getNewImageFile();
-                BitmapUtils.saveBitmap(bmp, file);
-                BitmapUtils.recycle(bmp);
-                mCaptureCallback.onCapture(file);
-                mCaptureCallback = null;
+                mVideoEncoder.frameAvailable(buffer.array(), System.nanoTime());
             }
         });
-    }
 
-    public interface CaptureCallback {
-        void onCapture(File path);
-    }
-
-    public void capture(CaptureCallback callback) {
-        mCaptureCallback = callback;
-        mCapturePending = true;
+        mGLSurfaceView.requestRender();
     }
 }
